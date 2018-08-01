@@ -3,29 +3,29 @@ import time
 import cv2
 import glob
 import os
+from Constants import *
 from Body import *
-
-IMAGE_DIR = '/home/il/software/openpose/gauritest'
-JSON_FILE_DIR = '/home/il/software/openpose/gauritestjson'
-
-IMAGE_WRITE_DIR = './images/'
-
-NUM_X_PIXELS = 1280
-NUM_Y_PIXELS = 720
-
-COLOR_RED = (0, 0, 255) # Red Green Blue
-COLOR_GREEN = (0, 255, 0)
-COLOR_BLUE = (255, 0, 0)
+import numpy as np
+import matplotlib.pyplot as plt
 
 
-def sec_max_helper(file_list):
+json_files_path = os.path.abspath(JSON_FILE_DIR)
+image_write_path = os.path.abspath(IMAGE_WRITE_DIR)
+graph_x_time = []
+graph_y_error = []
+
+
+def second_max_helper(file_list):
+    """ Return the second most recently modified from a list of files.
+        Compensates for not reading files as they are written
+    """
     max_time = 0
     sec_max_time = 0
     try:
         max_file = file_list[0]
     except IndexError:
-        print('no files in current directory')
-    sec_max_file = ''
+        print(None)
+    sec_max_file = None
     for file in file_list:
         file_time = os.path.getctime(file)
         if file_time > max_time:
@@ -39,66 +39,145 @@ def sec_max_helper(file_list):
     return sec_max_file
 
 
+def distance_formula(coord1, coord2):
+    return ((coord1[0]-coord2[0])**2 + (coord1[1]-coord2[1])**2) ** 0.5
+
+
 def get_file_number(file):
-    end_index = file.index('_rendered.png')
+    end_index = file.index('_keypoints.json')
     return file[end_index-12: end_index]
 
 
-list_of_images = glob.glob(IMAGE_DIR + '/*.png')
-list_of_files = glob.glob(JSON_FILE_DIR + '/*.json')
+def get_image_from_file_number(file_number, list_of_images):
+    for f in list_of_images:
+        if file_number in f:
+            return f
+    return None
+
+
+extra_flag = ''
+
+if USE_REAL_IMAGE == 1:
+    image_files_path = os.path.abspath(IMAGE_FILE_DIR)
+    list_of_images = glob.glob(image_files_path + '/*.png')
+    for f in list_of_images:
+        os.remove(f)
+    extra_flag = ' --write_images ' + image_files_path
+
+list_of_files = glob.glob(json_files_path + '/*.json')
 for f in list_of_files:
     os.remove(f)
-for f in list_of_images:
-    os.remove(f)
 
-
-p = subprocess.Popen('./build/examples/openpose/openpose.bin --write_json ' + JSON_FILE_DIR +
-                     ' --write_images ' + IMAGE_DIR + ' --display 0 --number_people_max 1', shell=True,
-                     cwd='/home/il/software/openpose')
-
-k = -1
-frame_body_selected = None
+p = subprocess.Popen(OPENPOSE_BIN_FILE_DIR + 'openpose.bin --write_json ' + json_files_path + extra_flag +
+            ' --display 0 --number_people_max 1 --render_pose 0 --net_resolution 320x320', shell=True, cwd=OPENPOSE_DIR)
 
 print('Press c to capture. Press q to quit.')
-time.sleep(5)
+time.sleep(7)
+start = time.time()
+k = -1
+frame_body_selected = None
+num_similar_frames = 0
+last_file = None
+last_frame_error = 0
 while k != 113:
-    list_of_images = glob.glob(IMAGE_DIR + '/*.png')
-    list_of_files = glob.glob(JSON_FILE_DIR + '/*.json')
-    curr_image = sec_max_helper(list_of_images)
-    img = cv2.imread(curr_image)
-
-    if frame_body_selected:
-        curr_body = Body(sec_max_helper(list_of_files))
-        if curr_body.coord_normalized:
-            scale = curr_body.get_vert_scale_factor()
-            error_dict = subtract_dict_coord(curr_body, frame_body_selected, 'normalized')
-            circle_locations = get_scaled_dict_wrt_corner(frame_body_selected, scale, scale,
-                curr_body.get_part_coordinates('neck')[0], curr_body.get_part_coordinates('neck')[1])
-            error_threshold = 0.3
-            error_exists = False
-            for key in circle_locations:
-                if curr_body.coord[key]:
-                    circle_thickness = 1
-                    circle_radius = 15
-                    if get_part_error(error_dict, key) > error_threshold:
-                        cv2.circle(img, circle_locations[key], circle_radius, COLOR_RED, circle_thickness)
-                        error_exists = True
-                    else:
-                        cv2.circle(img, circle_locations[key], circle_radius, COLOR_GREEN, circle_thickness)
-            if error_exists:
-                cv2.putText(img, get_full_body_comments(curr_body, frame_body_selected, error_threshold, 'normalized'),
-                            (25, 695), 2, 0.4, (255, 0, 255))
-            else:
-                cv2.putText(img, 'Good Job!', (25, 695), 4, 4, (255, 0, 255))
+    list_of_files = glob.glob(json_files_path + '/*.json')
+    curr_file = second_max_helper(list_of_files)
 
     if k == 99:
-        latest_file = sec_max_helper(list_of_files)
-        print(latest_file)
-        frame_body_selected = Body(latest_file)
+        frame_body_selected = Body(curr_file)
 
-    cv2.imwrite(IMAGE_WRITE_DIR + get_file_number(curr_image) + '.png', img)
-    cv2.imshow('img', img)
+    if curr_file != last_file:
+        flipped_already = False
+        if USE_REAL_IMAGE:
+            list_of_images = glob.glob(image_files_path + '/*.png')
+            screen = cv2.imread(get_image_from_file_number(get_file_number(curr_file), list_of_images))
+        else:
+            screen = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
+        curr_body = Body(curr_file)
+        if curr_body.coord:
+            part_locations = curr_body.coord
+            for key in part_locations:
+                if part_locations[key] and \
+                        (key != 'right eye' and key != 'left eye' and key != 'right ear' and key != 'left ear'):
+                    cv2.circle(screen, (int(part_locations[key][0]), int(part_locations[key][1])), PART_LOCATION_RADIUS,
+                               COLOR_YELLOW, -1)
+                    for connection in BODY_CONNECTIONS_DICT[key]:
+                        if part_locations[connection]:
+                            cv2.line(screen, (int(part_locations[key][0]), int(part_locations[key][1])),
+                            (int(part_locations[connection][0]), int(part_locations[connection][1])), COLOR_YELLOW,
+                            LINE_THICKNESS)
+            if part_locations['nose'] and part_locations['neck'] and not USE_REAL_IMAGE:
+                cv2.circle(screen, (int(part_locations['nose'][0]), int(part_locations['nose'][1])), int(HEAD_RATIO *
+                distance_formula(part_locations['neck'], part_locations['nose'])), COLOR_YELLOW, LINE_THICKNESS)
+
+            if frame_body_selected:
+                if curr_body.coord_normalized and frame_body_selected.coord_normalized:
+                    scale = curr_body.get_vert_scale_factor()
+                    error_dict = subtract_dict_coord(curr_body, frame_body_selected, 'normalized')
+                    circle_locations = get_scaled_dict_wrt_corner(frame_body_selected, scale, scale,
+                        curr_body.get_part_coordinates('neck')[0], curr_body.get_part_coordinates('neck')[1])
+                    error_exists = False
+                    for key in circle_locations:
+                        if curr_body.coord[key] and circle_locations[key]:
+                            if get_part_error(error_dict, key) > ERROR_THRESHOLD:
+                                cv2.circle(screen, circle_locations[key], CIRCLE_RADIUS, COLOR_RED, CIRCLE_THICKNESS)
+                                error_exists = True
+                            else:
+                                cv2.circle(screen, circle_locations[key], CIRCLE_RADIUS, COLOR_GREEN, CIRCLE_THICKNESS)
+                            if part_locations[key] and circle_locations[key]:
+                                cv2.line(screen, (int(circle_locations[key][0]), int(circle_locations[key][1])),
+                                (int(part_locations[key][0]), int(part_locations[key][1])), COLOR_RED,
+                                ERROR_LINE_THICKNESS)
+                            for connection in BODY_CONNECTIONS_DICT[key]:
+                                if circle_locations[connection]:
+                                    cv2.line(screen, (int(circle_locations[key][0]), int(circle_locations[key][1])),
+                                             (int(circle_locations[connection][0]),
+                                              int(circle_locations[connection][1])), COLOR_BLUE, LINE_THICKNESS)
+                    flipped_screen = cv2.flip(screen, 1)
+                    flipped_already = True
+                    if last_frame_error-0.05 <= get_all_parts_average_error(curr_body, frame_body_selected,
+                                                                            'normalized') <= last_frame_error + 0.05:
+                        num_similar_frames += 1
+                    else:
+                        num_similar_frames = 0
+                    if error_exists:
+                        if num_similar_frames > 7:
+                            text = get_max_error_part_comments(curr_body, frame_body_selected, 'normalized',
+                                                               HIGH_ERROR_BOUNDARY)
+                            text_placement_x = int(WIDTH/128)
+                            text_placement_y = int(HEIGHT/72*5)
+                            dy = 70
+                            phrases = text.split('\n')
+                            for line in phrases:
+                                cv2.putText(flipped_screen, line, (text_placement_x, text_placement_y), 2, 1.5,
+                                            COLOR_RED)
+                                text_placement_y += dy
+
+                        last_frame_error = get_all_parts_average_error(curr_body, frame_body_selected, 'normalized')
+                    else:
+                        cv2.putText(flipped_screen, 'Good Job!', (25, 695), 4, 4, COLOR_PURPLE)
+
+                    graph_x_time.append(time.time()-start)
+                    error = get_all_parts_average_error(curr_body,frame_body_selected, 'normalized')
+                    cv2.putText(flipped_screen, 'Error: ' + str(round(error, 2)), (int(WIDTH/128*105),
+                                                                                   int(HEIGHT/72*5)), 4, 1, COLOR_RED)
+                    graph_y_error.append(error)
+                cv2.imwrite(image_write_path + '/' + get_file_number(curr_file) + '.png', flipped_screen)
+
+        if not flipped_already:
+            flipped_screen = cv2.flip(screen, 1)
+        winname = 'Test'
+        cv2.namedWindow(winname)
+        cv2.moveWindow(winname, 250, 250)
+        cv2.imshow(winname, flipped_screen)
+        last_file = curr_file
     k = cv2.waitKey(10)
 
+
 subprocess.Popen('kill '+str(p.pid+1), shell=True)
+
+fig = plt.figure()
+ax1 = fig.add_subplot(1,1,1)
+ax1.plot(graph_x_time, graph_y_error)
+plt.show()
 
