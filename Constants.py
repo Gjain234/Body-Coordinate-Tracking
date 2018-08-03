@@ -2,14 +2,16 @@ OPENPOSE_DIR = '/home/il/software/openpose'
 OPENPOSE_BIN_FILE_DIR = './build2/examples/openpose/'
 
 JSON_FILE_DIR = 'json_files'
-IMAGE_FILE_DIR = 'image_files'
-IMAGE_WRITE_DIR = 'direction_images'
 
 # set flag to True if you want to save images with instruction labels
 SAVE_IMAGES_WITH_ANNOTATION = True
+IMAGE_WRITE_DIR = 'direction_images'
+
 
 # setting flag to True will drastically slow down performance but will show actual recorded images
 USE_REAL_IMAGE = False
+IMAGE_FILE_DIR = 'image_files'
+
 
 COLOR_RED = (0, 0, 255) # BGR order
 COLOR_GREEN = (0, 255, 0)
