@@ -5,11 +5,13 @@ JSON_FILE_DIR = 'json_files'
 IMAGE_FILE_DIR = 'image_files'
 IMAGE_WRITE_DIR = 'direction_images'
 
+# set flag to True if you want to save images with instruction labels
+SAVE_IMAGES_WITH_ANNOTATION = True
 
-#setting flag to 1 will drastically slow down performance but will show actual recorded images
-USE_REAL_IMAGE = 0
+# setting flag to True will drastically slow down performance but will show actual recorded images
+USE_REAL_IMAGE = False
 
-COLOR_RED = (0, 0, 255) # Red Green Blue
+COLOR_RED = (0, 0, 255) # BGR order
 COLOR_GREEN = (0, 255, 0)
 COLOR_BLUE = (255, 0, 0)
 COLOR_PURPLE = (255, 0, 255)
@@ -29,7 +31,7 @@ HEAD_RATIO = 0.7
 WIDTH = 1280
 HEIGHT = 720
 
-CAMERA_FLIP = False
+CAMERA_FLIP = True
 
 BODY_CONNECTIONS_DICT = {
     'nose': ('neck',),
@@ -59,5 +61,8 @@ BODY_CONNECTIONS_DICT = {
     'right heel': ()
 }
 
+# threshold for if something is considered an error. Lower to make matching pose harder.
 ERROR_THRESHOLD = 0.3
+
+# threshold for what is a lot of error and what is a little error
 HIGH_ERROR_BOUNDARY = 1

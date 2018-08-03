@@ -51,22 +51,6 @@ def get_scaled_dict(body, scale_x, scale_y):
     return new_dict
 
 
-#todo: why function exists
-def get_scaled_dict_wrt_corner(body, scale_x, scale_y, origin_x, origin_y):
-    new_dict = {}
-    try:
-        for part in body.coord_normalized:
-            if body.coord_normalized[part] and \
-                    (part != 'right eye' and part != 'left eye' and part != 'right ear' and part != 'left ear'):
-                new_dict[part] = (int(origin_x - body.coord_normalized[part][0] * scale_x), int(origin_y -
-                                  body.coord_normalized[part][1] * scale_y))
-            else:
-                new_dict[part] = None
-    except(IndexError, AttributeError, KeyError):
-        print('Invalid dictionary type cannot be scaled wrt origin')
-    return new_dict
-
-
 def get_part_error(error_dict, part):
     try:
         if error_dict[part]:
